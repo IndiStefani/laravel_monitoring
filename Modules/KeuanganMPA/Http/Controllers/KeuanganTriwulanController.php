@@ -27,18 +27,18 @@ class KeuanganTriwulanController extends Controller
                     $query->whereBetween(\DB::raw('MONTH(rencana_mulai)'), [$bulanAwal, $bulanAkhir]);
                 })->get();
 
-            $realisasi = Realisasi::with('subPerencanaan.perencanaan.unit')
+            $realisasi = Realisasi::with('subPerencanaan')
                 ->whereBetween(\DB::raw('MONTH(tanggal_pembayaran)'), [$bulanAwal, $bulanAkhir])
                 ->get();
         } else {
-            $perencanaan = Perencanaan::with('subPerencanaan')
+            $perencanaan = Perencanaan::with('subPerencanaan.unit')
                 ->whereHas('subPerencanaan', function ($query) use ($bulanAwal, $bulanAkhir, $unit) {
                     $query->whereBetween(\DB::raw('MONTH(rencana_mulai)'), [$bulanAwal, $bulanAkhir])
                         ->whereIn('unit_id', $unit);
                 })->get();
 
-            $realisasi = Realisasi::with('subPerencanaan.perencanaan.unit')
-                ->whereHas('subPerencanaan.perencanaan', function ($query) use ($unit) {
+            $realisasi = Realisasi::with('subPerencanaan.unit')
+                ->whereHas('subPerencanaan', function ($query) use ($unit) {
                     $query->whereIn('unit_id', $unit);
                 })
                 ->whereBetween(\DB::raw('MONTH(tanggal_pembayaran)'), [$bulanAwal, $bulanAkhir])
@@ -90,10 +90,12 @@ class KeuanganTriwulanController extends Controller
         }
 
         // hitung total pagu
-        $total_pagu = 0;
-        foreach ($perencanaan as $item) {
-            $total_pagu += $item->pagu;
-        }
+        $total_pagu = $perencanaan->reduce(function ($carry, $item) {
+            $carry += $item->subPerencanaan->sum(function ($sub) {
+                return $sub->volume * $sub->harga_satuan;
+            }) ?? 0; // Jika null, tambahkan 0
+            return $carry;
+        }, 0);
 
         // Hitung total rpd
         $total_perencanaan = $perencanaan->reduce(function ($carry, $item) {
@@ -174,8 +176,8 @@ class KeuanganTriwulanController extends Controller
     {
         // Fetch data within the function
         $units = Unit::all();
-        $perencanaan = Perencanaan::with('subPerencanaan')->get();
-        $realisasi = Realisasi::with('subPerencanaan.perencanaan.unit')->get();
+        $perencanaan = Perencanaan::with('subPerencanaan.unit')->get();
+        $realisasi = Realisasi::with('subPerencanaan.unit')->get();
 
         // Initialize unitRealisasi with all units
         $unitRealisasi = [];
@@ -194,16 +196,7 @@ class KeuanganTriwulanController extends Controller
             $unit = $item->unit;
             if ($unit) {
                 $unitId = $unit->id;
-                $unitRealisasi[$unitId]['total_pagu'] += $item->pagu;
-            }
-        }
-
-        // Calculate total perencanaan per unit
-        foreach ($perencanaan as $item) {
-            $unit = $item->unit;
-            if ($unit) {
-                $unitId = $unit->id;
-                $unitRealisasi[$unitId]['total_perencanaan'] += $item->subPerencanaan->sum(function ($sub) {
+                $unitRealisasi[$unitId]['total_pagu'] += $item->subPerencanaan->sum(function ($sub) {
                     return $sub->volume * $sub->harga_satuan;
                 });
             }
@@ -211,13 +204,10 @@ class KeuanganTriwulanController extends Controller
 
         // Calculate total realisasi per unit
         foreach ($realisasi as $item) {
-            $subPerencanaan = $item->subPerencanaan;
-            if ($subPerencanaan && $subPerencanaan->perencanaan) {
-                $unit = $subPerencanaan->perencanaan->unit;
-                if ($unit) {
-                    $unitId = $unit->id;
-                    $unitRealisasi[$unitId]['total_realisasi'] += $item->realisasi;
-                }
+            $unit = $item->subPerencanaan->unit;
+            if ($unit) {
+                $unitId = $unit->id;
+                $unitRealisasi[$unitId]['total_realisasi'] += $item->realisasi;
             }
         }
 

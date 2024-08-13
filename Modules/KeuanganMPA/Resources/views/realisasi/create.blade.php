@@ -29,7 +29,7 @@
                         class="form-horizontal" enctype="multipart/form-data">
                         {{ csrf_field() }}
                         <input type="hidden" name="sub_perencanaan_id" value="{{ $subPerencanaanId }}">
-                        @include ('keuangan::realisasi.form', ['formMode' => 'create'])
+                        @include ('keuanganmpa::realisasi.form', ['formMode' => 'create'])
 
                     </form>
                 </div>

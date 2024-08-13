@@ -21,7 +21,7 @@ class RealisasiController extends Controller
         $periode_anggaran = $request->input('periode');
         $tahun_anggaran = $request->input('tahun');
 
-        $perencanaansQuery = SubPerencanaan::with(['perencanaan.unit', 'realisasi']);
+        $perencanaansQuery = SubPerencanaan::with(['unit', 'realisasi']);
         if ($unit) {
             // Jika user bukan admin, filter berdasarkan unit dari session
             $perencanaansQuery->whereHas('perencanaan', function ($query) use ($unit) {
@@ -49,22 +49,22 @@ class RealisasiController extends Controller
             $perencanaansQuery->whereMonth('rencana_bayar', '>=', 1)->whereMonth('rencana_bayar', '<=', $periode_anggaran);
         }
 
-        if ($tahun_anggaran) {
-            $perencanaansQuery->whereHas('perencanaan', function ($query) use ($tahun_anggaran) {
-                $query->where('tahun', $tahun_anggaran);
-            });
-        }
+        // if ($tahun_anggaran) {
+        //     $perencanaansQuery->whereHas('perencanaan', function ($query) use ($tahun_anggaran) {
+        //         $query->where('tahun', $tahun_anggaran);
+        //     });
+        // }
 
         $subPerencanaans = $perencanaansQuery->get()->map(function ($subPerencanaan) {
             if ($subPerencanaan->perencanaan) {
-                $pagu = $subPerencanaan->perencanaan->pagu;
+                $pagu = $subPerencanaan->volume * $subPerencanaan->harga_satuan;
                 $realisasiTotal = $subPerencanaan->realisasi->sum('realisasi');
                 $sisa = $pagu - $realisasiTotal;
                 $persentase = $pagu > 0 ? ($realisasiTotal / $pagu) * 100 : 0;
 
                 return [
                     'id' => $subPerencanaan->id,
-                    'pic' => $subPerencanaan->perencanaan->unit ? $subPerencanaan->perencanaan->unit->nama : ' ',
+                    'pic' => $subPerencanaan->unit ? $subPerencanaan->unit->nama : ' ',
                     'kode' => $subPerencanaan->perencanaan->kode,
                     'kegiatan' => $subPerencanaan->kegiatan,
                     'pagu' => $pagu,
@@ -129,8 +129,7 @@ class RealisasiController extends Controller
 
         // Ambil nilai pagu dari perencanaan terkait
         $subPerencanaan = SubPerencanaan::findOrFail($request->input('sub_perencanaan_id'));
-        $perencanaan = $subPerencanaan->perencanaan;
-        $pagu = $perencanaan->pagu;
+        $pagu = $subPerencanaan->volume * $subPerencanaan->harga_satuan;
 
         // Validasi nilai realisasi tidak melebihi pagu
         if ($request->input('realisasi') > $pagu) {
