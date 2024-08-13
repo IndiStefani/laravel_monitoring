@@ -1,4 +1,6 @@
 {
     "Kepegawaian": true,
-    "Keuangan": true
+    "Keuangan": true,
+    "MonitoringMPA": true,
+    "KeuanganMPA": true
 }
